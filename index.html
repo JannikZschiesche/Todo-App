@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aufgabenmanager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans antialiased min-h-screen p-4 md:p-8">
+    <div class="max-w-4xl mx-auto bg-white p-6 md:p-10 rounded-2xl shadow-xl" x-data="taskApp()">
+        
+        <h1 class="text-4xl font-extrabold mb-8 text-indigo-700 tracking-tight">Aufgabenmanager</h1>
+
+        <form @submit.prevent="addTask" class="flex flex-col md:flex-row gap-4 mb-10 bg-slate-50 p-6 rounded-xl border border-slate-200">
+            <input 
+                x-model="newTask" 
+                type="text" 
+                placeholder="Was muss erledigt werden?" 
+                class="flex-1 p-4 border border-slate-300 rounded-lg focus:outline-none focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 transition-all text-lg" 
+                required>
+            <select 
+                x-model="newCategory" 
+                class="p-4 border border-slate-300 rounded-lg focus:outline-none focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 bg-white cursor-pointer">
+                <option value="Allgemein">Allgemein</option>
+                <option value="Arbeit">Arbeit</option>
+                <option value="Privat">Privat</option>
+                <option value="Studium">Studium</option>
+            </select>
+            <button 
+                type="submit" 
+                class="bg-indigo-600 text-white font-semibold px-8 py-4 rounded-lg hover:bg-indigo-700 active:transform active:scale-95 transition-all shadow-md hover:shadow-lg">
+                Hinzufügen
+            </button>
+        </form>
+
+        <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-8 bg-slate-50 p-4 rounded-xl border border-slate-200">
+            <div class="flex gap-2 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
+                <button @click="filter = 'all'" :class="filter === 'all' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-100'" class="px-5 py-2.5 rounded-lg font-medium transition-all whitespace-nowrap">Alle</button>
+                <button @click="filter = 'active'" :class="filter === 'active' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-100'" class="px-5 py-2.5 rounded-lg font-medium transition-all whitespace-nowrap">Offen</button>
+                <button @click="filter = 'completed'" :class="filter === 'completed' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-100'" class="px-5 py-2.5 rounded-lg font-medium transition-all whitespace-nowrap">Erledigt</button>
+            </div>
+            <select x-model="sortBy" class="w-full md:w-auto p-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white cursor-pointer font-medium text-slate-700">
+                <option value="newest">Neueste zuerst</option>
+                <option value="oldest">Älteste zuerst</option>
+            </select>
+        </div>
+
+        <ul class="space-y-4">
+            <template x-for="task in getFilteredAndSortedTasks()" :key="task.id">
+                <li class="group flex flex-col sm:flex-row sm:items-center justify-between p-5 border border-slate-200 rounded-xl transition-all duration-200 hover:shadow-md hover:border-indigo-200" :class="task.completed ? 'bg-slate-50 opacity-75' : 'bg-white'">
+                    
+                    <div class="flex items-start sm:items-center gap-4 mb-4 sm:mb-0">
+                        <input 
+                            type="checkbox" 
+                            x-model="task.completed" 
+                            @change="saveTasks" 
+                            class="w-6 h-6 mt-1 sm:mt-0 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer transition-colors">
+                        
+                        <div class="flex flex-col">
+                            <template x-if="editingId !== task.id">
+                                <p class="text-xl font-medium break-all" :class="task.completed ? 'line-through text-slate-400' : 'text-slate-800'" x-text="task.text"></p>
+                            </template>
+                            
+                            <template x-if="editingId === task.id">
+                                <div class="flex gap-2 mt-1">
+                                    <input type="text" x-model="editingText" class="p-2 border border-indigo-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500" @keyup.enter="saveEdit(task)" @keyup.escape="cancelEdit()">
+                                    <button @click="saveEdit(task)" class="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 text-sm">Speichern</button>
+                                    <button @click="cancelEdit()" class="bg-slate-400 text-white px-3 py-1 rounded hover:bg-slate-500 text-sm">Abbrechen</button>
+                                </div>
+                            </template>
+
+                            <div class="flex gap-2 mt-2" x-show="editingId !== task.id">
+                                <span class="text-xs font-bold px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full uppercase tracking-wider" x-text="task.category"></span>
+                                <span class="text-xs font-medium px-3 py-1 bg-slate-100 text-slate-500 rounded-full" x-text="new Date(task.timestamp).toLocaleDateString('de-DE')"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-2 sm:opacity-0 group-hover:opacity-100 transition-opacity duration-200 self-end sm:self-auto" x-show="editingId !== task.id">
+                        <button @click="startEdit(task)" class="text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 p-2.5 rounded-lg transition-colors font-medium text-sm">Bearbeiten</button>
+                        <button @click="deleteTask(task.id)" class="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-2.5 rounded-lg transition-colors font-medium text-sm">Löschen</button>
+                    </div>
+                </li>
+            </template>
+            
+            <li x-show="getFilteredAndSortedTasks().length === 0" class="text-center p-10 text-slate-500 border-2 border-dashed border-slate-200 rounded-xl">
+                Keine Aufgaben in dieser Ansicht gefunden.
+            </li>
+        </ul>
+    </div>
+
+    <script>
+        function taskApp() {
+            return {
+                tasks: JSON.parse(localStorage.getItem('tasks') || '[]'),
+                newTask: '',
+                newCategory: 'Allgemein',
+                filter: 'all',
+                sortBy: 'newest',
+                editingId: null,
+                editingText: '',
+
+                saveTasks() {
+                    localStorage.setItem('tasks', JSON.stringify(this.tasks));
+                },
+
+                addTask() {
+                    if (this.newTask.trim() === '') return;
+                    this.tasks.push({
+                        id: Date.now(),
+                        text: this.newTask.trim(),
+                        category: this.newCategory,
+                        completed: false,
+                        timestamp: Date.now()
+                    });
+                    this.newTask = '';
+                    this.saveTasks();
+                },
+
+                deleteTask(id) {
+                    this.tasks = this.tasks.filter(t => t.id !== id);
+                    this.saveTasks();
+                },
+
+                startEdit(task) {
+                    this.editingId = task.id;
+                    this.editingText = task.text;
+                },
+
+                saveEdit(task) {
+                    if (this.editingText.trim() !== '') {
+                        const index = this.tasks.findIndex(t => t.id === task.id);
+                        if (index !== -1) {
+                            this.tasks[index].text = this.editingText.trim();
+                            this.saveTasks();
+                        }
+                    }
+                    this.editingId = null;
+                },
+
+                cancelEdit() {
+                    this.editingId = null;
+                },
+
+                getFilteredAndSortedTasks() {
+                    let filtered = this.tasks;
+
+                    if (this.filter === 'active') {
+                        filtered = filtered.filter(t => !t.completed);
+                    } else if (this.filter === 'completed') {
+                        filtered = filtered.filter(t => t.completed);
+                    }
+
+                    return filtered.sort((a, b) => {
+                        if (this.sortBy === 'newest') {
+                            return b.timestamp - a.timestamp;
+                        } else {
+                            return a.timestamp - b.timestamp;
+                        }
+                    });
+                }
+            }
+        }
+    </script>
+</body>
+</html>
